@@ -4,7 +4,7 @@ import math
 import copy
 
 class MinimaxBot(Bot):
-    def __init__(self, player_idx, max_depth=3):
+    def __init__(self, player_idx, max_depth=4):
         super().__init__(player_idx)
         self.max_depth = max_depth
         # Stats

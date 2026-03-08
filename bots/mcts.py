@@ -16,7 +16,7 @@ class MCTSNode:
         self.player_just_moved = None
 
 class MCTSBot(Bot):
-    def __init__(self, player_idx, iterations=1000, max_time=None):
+    def __init__(self, player_idx, iterations=200, max_time=None):
         super().__init__(player_idx)
         self.iterations = iterations
         # Stats

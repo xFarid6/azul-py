@@ -8,7 +8,7 @@ import glob
 from game.engine import GameEngine
 from ui.renderer import Renderer
 from ui.input import InputManager
-from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
+from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT, FPS, PANEL_W
 from bots import MinimaxBot, MCTSBot
 
 class AzulGame:
@@ -32,7 +32,8 @@ class AzulGame:
         
         # Move log (list of strings describing each move)
         self.move_log = []
-        self.move_log_scroll = 0  # scroll offset
+        self.move_log_scroll = 0  
+        self.stats_scroll = 0     # scroll offset for stats panel
         
         # Settings
         self.show_hint = show_hint
@@ -130,9 +131,27 @@ class AzulGame:
                         continue
                         
                 elif event.type == pygame.MOUSEWHEEL:
-                    # Scroll move log
-                    self.move_log_scroll = max(0, self.move_log_scroll - event.y)
-                    self.move_log_scroll = min(max(0, len(self.move_log) - 12), self.move_log_scroll)
+                    m_pos = pygame.mouse.get_pos()
+                    w_curr, h_curr = self.screen.get_size()
+                    panel_x = w_curr - PANEL_W - 8
+                    log_h = 260
+                    log_y = h_curr - log_h - 6
+                    
+                    # Log area hover check
+                    log_rect = pygame.Rect(panel_x, log_y, PANEL_W, log_h)
+                    if log_rect.collidepoint(m_pos):
+                        self.move_log_scroll = max(0, self.move_log_scroll - event.y)
+                        self.move_log_scroll = min(max(0, len(self.move_log) - 12), self.move_log_scroll)
+                    
+                    # Stats area hover check
+                    stats_y = 55
+                    stats_h = h_curr - stats_y - log_h - 20
+                    stats_rect = pygame.Rect(panel_x, stats_y, PANEL_W, stats_h)
+                    if stats_rect.collidepoint(m_pos):
+                        # Scroll stats (pixels)
+                        self.stats_scroll = max(0, self.stats_scroll - event.y * 20)
+                        # No easy way to know max_scroll without drawing, but let's cap at a reasonable large value or keep as is
+                        self.stats_scroll = min(2000, self.stats_scroll)
                         
                 # Only handle human input if it's a human's turn
                 if not self.engine.game_over and not is_bot_turn:
@@ -209,7 +228,9 @@ class AzulGame:
                 bot_stats=bot_stats,
                 endgame_proximity=endgame_proximity,
                 hint_move=hint_move if self.show_hint else None,
-                player_names=self.player_names
+                player_names=self.player_names,
+                stats_scroll=self.stats_scroll,
+                hovered_line=None if self.input_manager.selected_draft else highlighted_line
             )
             
             # Draw game over
@@ -223,20 +244,21 @@ class AzulGame:
         sys.exit()
 
     def _draw_game_over(self):
-        s = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        w, h = self.screen.get_size()
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
         s.fill((0, 0, 0, 180))
         self.screen.blit(s, (0, 0))
         
         font = pygame.font.SysFont('Arial', 64, bold=True)
         text = font.render("GAME OVER", True, (255, 200, 0))
-        self.screen.blit(text, (WINDOW_WIDTH//2 - text.get_width()//2, WINDOW_HEIGHT//2 - 100))
+        self.screen.blit(text, (w // 2 - text.get_width() // 2, h // 2 - 120))
         
         small_font = pygame.font.SysFont('Arial', 32)
         score_texts = [f"P{i+1}: {p.score}" for i, p in enumerate(self.engine.state.players)]
         scores_str = "  -  ".join(score_texts)
         
         scores = small_font.render(scores_str, True, (255, 255, 255))
-        self.screen.blit(scores, (WINDOW_WIDTH//2 - scores.get_width()//2, WINDOW_HEIGHT//2))
+        self.screen.blit(scores, (w // 2 - scores.get_width() // 2, h // 2 - 20))
         
         # Find winner
         max_score = max(p.score for p in self.engine.state.players)
@@ -248,7 +270,10 @@ class AzulGame:
             winner_str = f"Player {winners[0]} Wins!"
             
         win_text = font.render(winner_str, True, (0, 255, 0))
-        self.screen.blit(win_text, (WINDOW_WIDTH//2 - win_text.get_width()//2, WINDOW_HEIGHT//2 + 50))
+        self.screen.blit(win_text, (w // 2 - win_text.get_width() // 2, h // 2 + 50))
+        
+        restart_text = small_font.render("Press R to Restart  |  Q for Menu", True, (200, 200, 200))
+        self.screen.blit(restart_text, (w // 2 - restart_text.get_width() // 2, h // 2 + 150))
 
 
 def show_startup_screen(screen, clock):
@@ -541,9 +566,9 @@ def main_loop():
                     b_type = args.bots[bot_idx - 1]
                     
                 if b_type == 'mcts':
-                    bots_dict[bot_idx] = MCTSBot(player_idx=bot_idx, iterations=100)
+                    bots_dict[bot_idx] = MCTSBot(player_idx=bot_idx, iterations=200)
                 else:
-                    bots_dict[bot_idx] = MinimaxBot(player_idx=bot_idx, max_depth=2)
+                    bots_dict[bot_idx] = MinimaxBot(player_idx=bot_idx, max_depth=4)
                     
             app = AzulGame(screen=screen, clock=clock, num_players=chosen_players, bots=bots_dict)
             app.engine = engine # override initialized engine with loaded
@@ -564,7 +589,7 @@ def main_loop():
             for i in range(num_bots):
                 player_idx = chosen_players - num_bots + i  # assign to last N slots
                 if bot_type == 'mcts':
-                    bots_dict[player_idx] = MCTSBot(player_idx=player_idx, iterations=100)
+                    bots_dict[player_idx] = MCTSBot(player_idx=player_idx, iterations=1000)
                 else:
                     bots_dict[player_idx] = MinimaxBot(player_idx=player_idx, max_depth=2)
                     

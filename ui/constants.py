@@ -27,6 +27,7 @@ TILE_COLORS = {
 # Dimensions
 TILE_SIZE = 40
 PADDING = 5
+PANEL_W = 260   # Width of the right-side stats/log panel
 
 # Board dimensions
 BOARD_WIDTH = 520

@@ -37,8 +37,8 @@ class Renderer:
         right_edge = w - PANEL_W - pad  # boards must stay left of the panel
 
         positions = [
-            (pad,                                    pad),           # top-left
-            (right_edge - BOARD_WIDTH,               pad),           # top-right
+            (pad,                                    pad + 40),      # top-left (moved down)
+            (right_edge - BOARD_WIDTH,               pad + 40),      # top-right (moved down)
             (pad,                                    h - BOARD_HEIGHT - pad),   # bot-left
             (right_edge - BOARD_WIDTH,               h - BOARD_HEIGHT - pad),  # bot-right
         ]
@@ -118,7 +118,7 @@ class Renderer:
     def draw_game_state(self, game_state, selected_draft=None, highlighted_line=None,
                         mouse_pos=None, move_log=None, move_log_scroll=0, bag_count=0,
                         tiles_placed=0, bot_stats=None, endgame_proximity=0,
-                        hint_move=None, player_names=None):
+                        hint_move=None, player_names=None, stats_scroll=0, hovered_line=None):
         self.screen.fill(BG_COLOR)
         layout = self.get_layout()
         w, h = layout['w'], layout['h']
@@ -145,7 +145,7 @@ class Renderer:
                                      undo_rect.centery - undo_text.get_height()//2))
 
         hotkey_text = self.small_font.render(
-            "ESC: Save & Exit  |  R: Restart  |  Q: Quit  |  Scroll: Move Log", True, TEXT_COLOR)
+            "ESC: Save & Exit  |  R: Restart  |  Q: Quit  |  Scroll: Move Log / Stats", True, TEXT_COLOR)
         self.screen.blit(hotkey_text, (140, h - 48))
 
         # ── Right-side panel ─────────────────────────────────────────
@@ -154,21 +154,26 @@ class Renderer:
 
         # Split panel into stats (top) and move log (bottom 260px)
         log_h    = 260
-        stats_h  = h - panel_y - log_h - 12
+        stats_gap = 10
+        stats_h  = h - panel_y - log_h - stats_gap - 10
 
-        # Stats background
+        # Stats background and clipping
         stats_rect = pygame.Rect(panel_x, panel_y, PANEL_W, stats_h)
         pygame.draw.rect(self.screen, (225, 218, 205), stats_rect)
         pygame.draw.rect(self.screen, (160, 148, 130), stats_rect, 2)
 
-        sy = panel_y + 10
+        stats_clip = pygame.Rect(panel_x + 2, panel_y + 2, PANEL_W - 4, stats_h - 4)
+        self.screen.set_clip(stats_clip)
+        
+        curr_sy = panel_y + 10 - stats_scroll
+
         def draw_stat(label, val):
-            nonlocal sy
+            nonlocal curr_sy
             lbl  = self.small_font.render(label, True, (100, 90, 80))
             vlbl = self.font.render(str(val), True, TEXT_COLOR)
-            self.screen.blit(lbl,  (panel_x + 8, sy))
-            self.screen.blit(vlbl, (panel_x + 8, sy + 17))
-            sy += 42
+            self.screen.blit(lbl,  (panel_x + 8, curr_sy))
+            self.screen.blit(vlbl, (panel_x + 8, curr_sy + 17))
+            curr_sy += 42
 
         draw_stat("Tiles in Bag:",   bag_count)
         draw_stat("Tiles Placed:",   tiles_placed)
@@ -176,33 +181,35 @@ class Renderer:
 
         # Endgame proximity bar
         ep_lbl = self.small_font.render("Endgame Proximity:", True, (100, 90, 80))
-        self.screen.blit(ep_lbl, (panel_x + 8, sy))
-        sy += 18
+        self.screen.blit(ep_lbl, (panel_x + 8, curr_sy))
+        curr_sy += 18
         bar_w = PANEL_W - 16
-        bar_rect = pygame.Rect(panel_x + 8, sy, bar_w, 14)
+        bar_rect = pygame.Rect(panel_x + 8, curr_sy, bar_w, 14)
         pygame.draw.rect(self.screen, (180, 170, 160), bar_rect)
         fill_w = int(bar_w * (endgame_proximity / 5.0))
         fill_col = ((220, 80, 80) if endgame_proximity >= 4 else
                     (220, 180, 80) if endgame_proximity >= 3 else (80, 160, 80))
-        pygame.draw.rect(self.screen, fill_col, pygame.Rect(panel_x + 8, sy, fill_w, 14))
+        pygame.draw.rect(self.screen, fill_col, pygame.Rect(panel_x + 8, curr_sy, fill_w, 14))
         pygame.draw.rect(self.screen, (120, 110, 100), bar_rect, 1)
-        sy += 28
+        curr_sy += 28
 
         # Bot stats
         if bot_stats:
             sep = self.small_font.render("── Bot Stats ──", True, (100, 90, 80))
-            self.screen.blit(sep, (panel_x + 8, sy))
-            sy += 22
+            self.screen.blit(sep, (panel_x + 8, curr_sy))
+            curr_sy += 22
             for pidx, stats in bot_stats.items():
-                n = player_names[pidx] if player_names and pidx < len(player_names) else f"P{pidx+1}"
+                pname_bot = player_names[pidx] if player_names and pidx < len(player_names) else f"P{pidx+1}"
                 if stats['type'] == 'minimax':
-                    draw_stat(f"{n} Nodes/last:", f"{stats['last_nodes']:,}")
-                    draw_stat(f"{n} Nodes/total:", f"{stats['total_nodes']:,}")
-                    draw_stat(f"{n} Think (ms):", f"{stats['last_think_ms']:.0f}")
+                    draw_stat(f"{pname_bot} Nodes/last:", f"{stats['last_nodes']:,}")
+                    draw_stat(f"{pname_bot} Nodes/total:", f"{stats['total_nodes']:,}")
+                    draw_stat(f"{pname_bot} Think (ms):", f"{stats['last_think_ms']:.0f}")
                 elif stats['type'] == 'mcts':
-                    draw_stat(f"{n} Sims/last:", f"{stats['last_simulations']:,}")
-                    draw_stat(f"{n} Sims/total:", f"{stats['total_simulations']:,}")
-                    draw_stat(f"{n} Think (ms):", f"{stats['last_think_ms']:.0f}")
+                    draw_stat(f"{pname_bot} Sims/last:", f"{stats['last_simulations']:,}")
+                    draw_stat(f"{pname_bot} Sims/total:", f"{stats['total_simulations']:,}")
+                    draw_stat(f"{pname_bot} Think (ms):", f"{stats['last_think_ms']:.0f}")
+
+        self.screen.set_clip(None)
 
         # ── Move log panel ──────────────────────────────────────────
         log_y   = h - log_h - 6
@@ -232,8 +239,11 @@ class Renderer:
             pos  = layout['player_positions'][i % 4]
             pname = (player_names[i] if player_names and i < len(player_names)
                      else f"Player {i+1}")
+            is_cur = (game_state.current_player_idx == i)
+            board_hovered_line = hovered_line if is_cur else None
             self._draw_player_board(player, pname, pos[0], pos[1],
-                                    game_state.current_player_idx == i, highlighted_line)
+                                    is_cur, highlighted_line, hovered_line=board_hovered_line)
+
 
         # ── Selected draft label ──────────────────────────────────────
         if selected_draft:
@@ -337,7 +347,7 @@ class Renderer:
     # ------------------------------------------------------------------
     # Player board
     # ------------------------------------------------------------------
-    def _draw_player_board(self, player, text, x, y, is_current, highlighted_line):
+    def _draw_player_board(self, player, text, x, y, is_current, highlighted_line, hovered_line=None):
         board_rect = pygame.Rect(x, y, BOARD_WIDTH, BOARD_HEIGHT)
         color = (255, 250, 230) if is_current else BOARD_BG
         pygame.draw.rect(self.screen, color, board_rect)
@@ -346,26 +356,27 @@ class Renderer:
         name_surf = self.font.render(f"{text}  Score: {player.score}", True, TEXT_COLOR)
         self.screen.blit(name_surf, (x + 10, y + 10))
 
-        start_y   = y + 42           # tighter so floor fits within BOARD_HEIGHT
-        pattern_x = x + 200          # right edge of pattern lines (row 5 ends here)
-        wall_x    = x + 215          # left edge of wall (small gap after pattern)
+        start_y   = y + 70           
+        pattern_x = x + 210          # left edge of the rightmost pattern slot
+        wall_x    = x + 270          # 20px padding from pattern_x + TILE_SIZE
 
         # Pattern Lines (right-aligned inside left half of board)
         for r in range(5):
             line = player.pattern_lines[r]
+            
             for c in range(r + 1):
                 tx = pattern_x - c * (TILE_SIZE + PADDING)
                 ty = start_y + r * (TILE_SIZE + PADDING)
 
-                if is_current and highlighted_line == r:
-                    pygame.draw.rect(self.screen, HIGHLIGHT_COLOR,
+                # Highlighting
+                if is_current and (highlighted_line == r or hovered_line == r):
+                    pygame.draw.rect(self.screen, HIGHLIGHT_COLOR if highlighted_line == r else (150, 150, 150),
                                      (tx - 2, ty - 2, TILE_SIZE + 4, TILE_SIZE + 4), 2)
 
                 pygame.draw.rect(self.screen, (200, 190, 180), (tx, ty, TILE_SIZE, TILE_SIZE))
-
-                # Tiles are placed right-to-left: rightmost slot = index 0
-                slot = r - c          # slot 0 is rightmost
-                if slot < line['count']:
+                
+                # Fill right-to-left: c=0 is rightmost slot
+                if c < line['count']:
                     self.draw_tile(line['color'], tx, ty)
 
         # Wall (5×5)
@@ -385,10 +396,17 @@ class Renderer:
                                      (tx, ty, TILE_SIZE, TILE_SIZE), 1)
 
         # Floor Line
-        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 10
-        floor_x = x + 10
+        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 30
+        floor_x = x + 30
         floor_text = self.small_font.render("Floor:", True, TEXT_COLOR)
         self.screen.blit(floor_text, (floor_x, floor_y + 10))
+        
+        # Highlight floor if hovered
+        if is_current and hovered_line == -1:
+            for i in range(7):
+                tx = floor_x + 55 + i * (TILE_SIZE + PADDING)
+                pygame.draw.rect(self.screen, (150, 150, 150),
+                                 (tx - 2, floor_y - 2, TILE_SIZE + 4, TILE_SIZE + 4), 2)
 
         for i in range(7):
             tx = floor_x + 55 + i * (TILE_SIZE + PADDING)
@@ -396,9 +414,10 @@ class Renderer:
             pen_text = self.small_font.render(str(PlayerBoard.FLOOR_PENALTIES[i]), True, ERROR_COLOR)
             self.screen.blit(pen_text, (tx + 8, floor_y + TILE_SIZE + 3))
 
-            if is_current and highlighted_line == -1:
-                pygame.draw.rect(self.screen, HIGHLIGHT_COLOR,
+            if is_current and (highlighted_line == -1 or hovered_line == -1):
+                pygame.draw.rect(self.screen, HIGHLIGHT_COLOR if highlighted_line == -1 else (255, 255, 255),
                                  (tx - 2, floor_y - 2, TILE_SIZE + 4, TILE_SIZE + 4), 2)
 
             if i < len(player.floor_line):
                 self.draw_tile(player.floor_line[i], tx, floor_y)
+

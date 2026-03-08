@@ -134,19 +134,22 @@ class InputManager:
         if not (bx <= x <= bx + BOARD_WIDTH and by <= y <= by + BOARD_HEIGHT):
             return None
             
-        start_y = by + 42
-        pattern_x = bx + 200
+        start_y = by + 70
+        pattern_x_right = bx + 210  # left edge of the rightmost pattern slot
         
         # Check pattern lines 0-4
         for r in range(5):
-            # Click area for a row: left side of board up to pattern_x
-            row_rect = pygame.Rect(bx + 10, start_y + r * (TILE_SIZE + PADDING), 190, TILE_SIZE)
+            # Row r has r+1 slots. Rightmost at pattern_x_right, leftmost at pattern_x_right - r*45
+            row_left = pattern_x_right - r * (TILE_SIZE + PADDING)
+            row_width = (r + 1) * (TILE_SIZE + PADDING) - PADDING
+            row_rect = pygame.Rect(row_left, start_y + r * (TILE_SIZE + PADDING), row_width, TILE_SIZE)
             if row_rect.collidepoint(x, y):
                 return r
                 
         # Check floor
-        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 10
-        floor_rect = pygame.Rect(bx + 10, floor_y, BOARD_WIDTH - 20, TILE_SIZE)
+        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 30
+        floor_x = bx + 30
+        floor_rect = pygame.Rect(floor_x + 55, floor_y, 7 * (TILE_SIZE + PADDING) - PADDING, TILE_SIZE)
         if floor_rect.collidepoint(x, y):
             return -1
             
