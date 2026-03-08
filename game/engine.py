@@ -20,6 +20,20 @@ class GameEngine:
             tiles = self.state.bag.draw(min(4, len(self.state.bag.tiles)))
             factory.fill(tiles)
 
+    def to_dict(self):
+        return {
+            'game_over': self.game_over,
+            'state': self.state.to_dict()
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        state_data = data['state']
+        e = cls(num_players=state_data['num_players'])
+        e.state = GameState.from_dict(state_data)
+        e.game_over = data['game_over']
+        return e
+
     def get_valid_moves(self, player_idx):
         """
         Returns a list of dicts:

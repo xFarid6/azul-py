@@ -12,7 +12,7 @@ from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 from bots import MinimaxBot, MCTSBot
 
 class AzulGame:
-    def __init__(self, screen, clock, num_players=2, bots=None, show_hint=False):
+    def __init__(self, screen, clock, num_players=2, bots=None, show_hint=False, bot_delay=0.25, player_names=None):
         self.screen = screen
         self.clock = clock
         
@@ -35,7 +35,9 @@ class AzulGame:
         self.move_log_scroll = 0  # scroll offset
         
         # Settings
-        self.show_hint = show_hint  # show best move for human players
+        self.show_hint = show_hint
+        self.bot_delay = bot_delay
+        self.player_names = player_names if player_names else [f"Player {i+1}" for i in range(num_players)]
         
         # Tiles played counter
         self.tiles_placed = 0
@@ -134,9 +136,13 @@ class AzulGame:
                         
                 # Only handle human input if it's a human's turn
                 if not self.engine.game_over and not is_bot_turn:
-                    moved = self.input_manager.handle_event(event)
+                    human_move = self.input_manager.handle_event(event)
+                    if human_move:
+                        self._log_move(human_move, current_p)
+                        self.tiles_placed += 1
 
             if is_bot_turn:
+                import time as _time
                 bot = self.bots[current_p]
                 move = bot.get_best_move(self.engine)
                 if move:
@@ -160,13 +166,12 @@ class AzulGame:
                             'last_think_ms': bot.last_think_ms
                         }
                     hint_move = None
+                    # If every player is a bot, pause so the user can watch
+                    if len(self.bots) == self.engine.state.num_players:
+                        _time.sleep(self.bot_delay)
                     
             # Check if a human move was made
             if self.engine.state.current_player_idx != current_p:
-                prev_p = current_p
-                if not is_bot_turn:
-                    # Human made a move, log it from the last selected draft
-                    self.tiles_placed += 1
                 self._save_state()
                 hint_move = None  # reset hint on new turn
             
@@ -203,7 +208,8 @@ class AzulGame:
                 tiles_placed=placed,
                 bot_stats=bot_stats,
                 endgame_proximity=endgame_proximity,
-                hint_move=hint_move if self.show_hint else None
+                hint_move=hint_move if self.show_hint else None,
+                player_names=self.player_names
             )
             
             # Draw game over
@@ -246,114 +252,196 @@ class AzulGame:
 
 
 def show_startup_screen(screen, clock):
-    font = pygame.font.SysFont('Arial', 64, bold=True)
-    small_font = pygame.font.SysFont('Arial', 24)
-    med_font = pygame.font.SysFont('Arial', 32, bold=True)
-    
-    options = [
-        {"label": "2 Players", "val": 2, "rect": None, "selected": True},
-        {"label": "3 Players", "val": 3, "rect": None, "selected": False},
-        {"label": "4 Players", "val": 4, "rect": None, "selected": False}
+    font     = pygame.font.SysFont('Arial', 56, bold=True)
+    small    = pygame.font.SysFont('Arial', 22)
+    med      = pygame.font.SysFont('Arial', 28, bold=True)
+    tiny     = pygame.font.SysFont('Arial', 18)
+
+    presets = [
+        ("1H  1B", 2, 1, "Human vs. Bot"),
+        ("1H  2B", 3, 2, "Human vs. 2 Bots"),
+        ("1H  3B", 4, 3, "Human vs. 3 Bots"),
+        ("2H  1B", 3, 1, "2 Humans + 1 Bot"),
+        ("2H  2B", 4, 2, "2 Humans + 2 Bots"),
+        ("2H",     2, 0, "2 Humans"),
+        ("3H",     3, 0, "3 Humans"),
+        ("4H",     4, 0, "4 Humans"),
+        ("2B",     2, 2, "2 Bots only"),
+        ("3B",     3, 3, "3 Bots only"),
+        ("4B",     4, 4, "4 Bots only"),
     ]
-    
+    selected_preset = 0
+    speed_options = [("0.1s", 0.1), ("0.25s", 0.25), ("0.5s", 0.5), ("1s", 1.0), ("2s", 2.0)]
+    selected_speed = 1
+    show_hint = False
+    load_btn  = {"rect": None}
     start_btn = {"rect": None}
-    load_btn = {"rect": None}
-    chosen_players = 2
     
+    player_names = ["Player 1", "Player 2", "Player 3", "Player 4"]
+    active_name_idx = -1
+    
+    COLS = 4
+    PRESET_W, PRESET_H, PRESET_GAP = 140, 56, 8
     rules = [
-        "AZUL RULES RECAP:",
-        "1. Draft tiles from a Factory or the Center.",
-        "2. Place them on one Pattern Line on your board.",
-        "3. Overflowing tiles fall to the Floor Line (minus points).",
-        "4. At round end, full Pattern Lines move 1 tile to the Wall.",
-        "5. Contiguous wall tiles score more points.",
-        "6. Game ends when someone completes a horizontal Wall row.",
+        "RULES RECAP:",
+        "1. Draft a color from a Factory or Center.",
+        "2. Place them on a Pattern Line.",
+        "3. Overflow goes to the Floor (penalties).",
+        "4. Full lines move 1 tile to the Wall.",
+        "5. More contiguous tiles = more points.",
+        "6. Game ends when a Wall row is complete.",
     ]
-    
+
     while True:
         w, h = screen.get_size()
-        screen.fill((240, 235, 225)) # BG_COLOR
-        
-        # Title
-        title = font.render("Azul Python", True, (50, 40, 30))
-        screen.blit(title, (w//2 - title.get_width()//2, 50))
-        
-        # Rules Block
-        rules_y = 150
-        for i, line in enumerate(rules):
-            surf = small_font.render(line, True, (100, 90, 80))
-            screen.blit(surf, (w//2 - 250, rules_y + i*30))
-            
-        # Player Select
+        screen.fill((240, 235, 225))
         m_pos = pygame.mouse.get_pos()
-        sel_y = 400
-        for i, opt in enumerate(options):
-            rect = pygame.Rect(w//2 - 200 + i*140, sel_y, 120, 50)
-            opt['rect'] = rect
+
+        title = font.render("Azul Python", True, (50, 40, 30))
+        screen.blit(title, (w // 2 - title.get_width() // 2, 20))
+
+        left_x  = max(30, w // 2 - 460)
+        right_x = w // 2 + 10
+
+        ry = 105
+        for i, line in enumerate(rules):
+            c = (60, 50, 40) if i == 0 else (100, 90, 80)
+            s = (med if i == 0 else small).render(line, True, c)
+            screen.blit(s, (left_x, ry + i * 28))
+
+        # -- Player Names (left, below rules) --
+        ny = ry + len(rules) * 28 + 20
+        screen.blit(med.render("Player Names:", True, (60, 50, 40)), (left_x, ny))
+        ny += 36
+        name_rects = []
+        _, np_curr, nb_curr, _ = presets[selected_preset]
+        for i in range(np_curr):
+            nr = pygame.Rect(left_x, ny + i*40, 220, 32)
+            name_rects.append((i, nr))
+            bg = (255, 255, 255) if i == active_name_idx else (230, 225, 215)
+            pygame.draw.rect(screen, bg, nr, border_radius=4)
+            pygame.draw.rect(screen, (100, 90, 80), nr, 2 if i == active_name_idx else 1, border_radius=4)
             
-            color = (200, 190, 180)
-            if opt['selected']:
-                color = (255, 200, 0)
-            elif rect.collidepoint(m_pos):
-                color = (220, 210, 200)
-                
-            pygame.draw.rect(screen, color, rect)
-            pygame.draw.rect(screen, (100, 90, 80), rect, 2)
-            
-            text = small_font.render(opt['label'], True, (50, 40, 30))
-            screen.blit(text, (rect.centerx - text.get_width()//2, rect.centery - text.get_height()//2))
-            
-        # Start Button
-        start_rect = pygame.Rect(w//2 - 220, sel_y + 100, 200, 60)
-        start_btn['rect'] = start_rect
-        color = (150, 200, 150)
-        if start_rect.collidepoint(m_pos):
-            color = (130, 180, 130)
-            
-        pygame.draw.rect(screen, color, start_rect)
-        pygame.draw.rect(screen, (50, 100, 50), start_rect, 3)
-        
-        s_text = med_font.render("START GAME", True, (255, 255, 255))
-        screen.blit(s_text, (start_rect.centerx - s_text.get_width()//2, start_rect.centery - s_text.get_height()//2))
-        
-        # Load Button
-        load_rect = pygame.Rect(w//2 + 20, sel_y + 100, 200, 60)
-        load_btn['rect'] = load_rect
-        color = (150, 150, 200)
-        if load_rect.collidepoint(m_pos):
-            color = (130, 130, 180)
-            
-        pygame.draw.rect(screen, color, load_rect)
-        pygame.draw.rect(screen, (50, 50, 100), load_rect, 3)
-        
-        l_text = med_font.render("LOAD GAME", True, (255, 255, 255))
-        screen.blit(l_text, (load_rect.centerx - l_text.get_width()//2, load_rect.centery - l_text.get_height()//2))
-            
+            txt = small.render(player_names[i], True, (50, 40, 30))
+            screen.blit(txt, (nr.x + 8, nr.y + 4))
+
+        gy = 100
+        ml = med.render("Game Mode:", True, (60, 50, 40))
+        screen.blit(ml, (right_x, gy))
+        gy += 36
+
+        preset_rects = []
+        for idx, (lt, np, nb, desc) in enumerate(presets):
+            row = idx // COLS
+            col = idx % COLS
+            rx  = right_x + col * (PRESET_W + PRESET_GAP)
+            ry2 = gy + row * (PRESET_H + PRESET_GAP)
+            rect = pygame.Rect(rx, ry2, PRESET_W, PRESET_H)
+            preset_rects.append(rect)
+            active = idx == selected_preset
+            hover  = rect.collidepoint(m_pos)
+            if active:
+                bg, border = (255, 200, 60), (180, 130, 0)
+            elif hover:
+                bg, border = (220, 210, 195), (130, 120, 110)
+            else:
+                bg, border = (205, 195, 182), (150, 138, 125)
+            pygame.draw.rect(screen, bg, rect, border_radius=6)
+            pygame.draw.rect(screen, border, rect, 2, border_radius=6)
+            t1 = med.render(lt, True, (40, 30, 20))
+            t2 = tiny.render(desc, True, (80, 70, 60))
+            screen.blit(t1, (rect.centerx - t1.get_width()//2, rect.y + 4))
+            screen.blit(t2, (rect.centerx - t2.get_width()//2, rect.y + 32))
+
+        rows_used = (len(presets) + COLS - 1) // COLS
+        bottom_y  = gy + rows_used * (PRESET_H + PRESET_GAP) + 14
+
+        sl = med.render("Bot Move Delay:", True, (60, 50, 40))
+        screen.blit(sl, (right_x, bottom_y))
+        bottom_y += 34
+
+        speed_rects = []
+        for si, (slbl, _v) in enumerate(speed_options):
+            sw = 76
+            sx = right_x + si * (sw + 6)
+            sr = pygame.Rect(sx, bottom_y, sw, 34)
+            speed_rects.append(sr)
+            sbg = (100, 165, 240) if si == selected_speed else (195, 208, 228) if sr.collidepoint(m_pos) else (180, 192, 212)
+            pygame.draw.rect(screen, sbg, sr, border_radius=5)
+            pygame.draw.rect(screen, (70, 100, 155), sr, 2, border_radius=5)
+            st = small.render(slbl, True, (15, 15, 55))
+            screen.blit(st, (sr.centerx - st.get_width()//2, sr.centery - st.get_height()//2))
+        bottom_y += 44
+
+        cb_size = 22
+        cb_x, cb_y = right_x, bottom_y
+        cb_rect = pygame.Rect(cb_x, cb_y, cb_size, cb_size)
+        pygame.draw.rect(screen, (240, 235, 215), cb_rect)
+        pygame.draw.rect(screen, (100, 90, 80), cb_rect, 2)
+        if show_hint:
+            pygame.draw.line(screen, (50, 150, 50), (cb_x+3, cb_y+11), (cb_x+9, cb_y+17), 3)
+            pygame.draw.line(screen, (50, 150, 50), (cb_x+9, cb_y+17), (cb_x+19, cb_y+4), 3)
+        cb_txt = small.render("Show Best Move Hint (slows game)", True, (50, 40, 30))
+        screen.blit(cb_txt, (cb_x + cb_size + 8, cb_y + 2))
+        bottom_y += 40
+
+        btn_y = min(bottom_y + 10, h - 80)
+        start_r = pygame.Rect(right_x, btn_y, 178, 54)
+        load_r  = pygame.Rect(right_x + 194, btn_y, 178, 54)
+        start_btn["rect"] = start_r
+        load_btn["rect"]  = load_r
+
+        for btn_r, bcol, blbl in [(start_r, (70, 160, 70), "START GAME"), (load_r, (70, 110, 190), "LOAD GAME")]:
+            bg = tuple(max(0, c - 25) for c in bcol) if btn_r.collidepoint(m_pos) else bcol
+            pygame.draw.rect(screen, bg, btn_r, border_radius=8)
+            pygame.draw.rect(screen, (25, 25, 25), btn_r, 2, border_radius=8)
+            bt = med.render(blbl, True, (255, 255, 255))
+            screen.blit(bt, (btn_r.centerx - bt.get_width()//2, btn_r.centery - bt.get_height()//2))
+
         pygame.display.flip()
-        
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                pygame.quit(); sys.exit()
             elif event.type == pygame.VIDEORESIZE:
                 screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit(); sys.exit()
+                if active_name_idx != -1:
+                    if event.key == pygame.K_BACKSPACE:
+                        player_names[active_name_idx] = player_names[active_name_idx][:-1]
+                    elif event.key == pygame.K_RETURN:
+                        active_name_idx = -1
+                    elif event.key == pygame.K_TAB:
+                        active_name_idx = (active_name_idx + 1) % np_curr
+                    else:
+                        if len(player_names[active_name_idx]) < 15 and event.unicode.isprintable():
+                            player_names[active_name_idx] += event.unicode
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Player selection
-                for opt in options:
-                    if opt['rect'] and opt['rect'].collidepoint(event.pos):
-                        for o in options: o['selected'] = False
-                        opt['selected'] = True
-                        chosen_players = opt['val']
-                
-                # Start game
-                if start_btn['rect'] and start_btn['rect'].collidepoint(event.pos):
-                    return {"action": "new", "players": chosen_players}
-                
-                # Load game
-                if load_btn['rect'] and load_btn['rect'].collidepoint(event.pos):
+                old_preset = selected_preset
+                active_name_idx = -1
+                for i, nr in name_rects:
+                    if nr.collidepoint(event.pos):
+                        active_name_idx = i
+                for idx, rect in enumerate(preset_rects):
+                    if rect.collidepoint(event.pos):
+                        selected_preset = idx
+                if selected_preset != old_preset:
+                    active_name_idx = -1 # Reset focus if preset changed
+                for si, sr in enumerate(speed_rects):
+                    if sr.collidepoint(event.pos):
+                        selected_speed = si
+                if cb_rect.collidepoint(event.pos):
+                    show_hint = not show_hint
+                if start_btn["rect"] and start_btn["rect"].collidepoint(event.pos):
+                    _, np, nb, _ = presets[selected_preset]
+                    return {"action": "new", "players": np, "num_bots": nb,
+                             "show_hint": show_hint, "bot_delay": speed_options[selected_speed][1],
+                             "player_names": player_names[:np]}
+                if load_btn["rect"] and load_btn["rect"].collidepoint(event.pos):
                     return {"action": "load"}
         clock.tick(60)
-
 def show_load_screen(screen, clock):
     font = pygame.font.SysFont('Arial', 64, bold=True)
     small_font = pygame.font.SysFont('Arial', 24)
@@ -465,20 +553,25 @@ def main_loop():
             
         else:
             chosen_players = action_res["players"]
+            num_bots = action_res.get("num_bots", 0)
+            bot_delay = action_res.get("bot_delay", 0.25)
             
-            # Initialize dictionary of bots using the chosen player count
+            # Build bots dict: bots fill slots from the last player down
+            # e.g. 2P 1B => bot is P2 (idx 1)
+            # e.g. 4P 4B => all 4 are bots
             bots_dict = {}
-            for i, bot_type in enumerate(args.bots):
-                player_idx = i + 1  # P1 (idx 0) remains human, P2 is idx 1, etc.
-                if player_idx >= chosen_players:
-                    break
-                    
-                if bot_type == 'minimax':
-                    bots_dict[player_idx] = MinimaxBot(player_idx=player_idx, max_depth=2)
-                elif bot_type == 'mcts':
+            bot_type = args.bots[0] if args.bots else 'minimax'
+            for i in range(num_bots):
+                player_idx = chosen_players - num_bots + i  # assign to last N slots
+                if bot_type == 'mcts':
                     bots_dict[player_idx] = MCTSBot(player_idx=player_idx, iterations=100)
+                else:
+                    bots_dict[player_idx] = MinimaxBot(player_idx=player_idx, max_depth=2)
                     
-            app = AzulGame(screen=screen, clock=clock, num_players=chosen_players, bots=bots_dict)
+            app = AzulGame(screen=screen, clock=clock, num_players=chosen_players, bots=bots_dict,
+                           show_hint=action_res.get('show_hint', False),
+                           bot_delay=bot_delay,
+                           player_names=action_res.get("player_names"))
             
         result = app.run()
         if result != "QUIT_TO_MENU":

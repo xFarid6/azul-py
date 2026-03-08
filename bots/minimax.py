@@ -7,14 +7,22 @@ class MinimaxBot(Bot):
     def __init__(self, player_idx, max_depth=3):
         super().__init__(player_idx)
         self.max_depth = max_depth
+        # Stats
+        self.total_nodes = 0
+        self.last_nodes = 0
+        self.last_think_ms = 0
 
     def get_best_move(self, engine):
+        import time
+        t_start = time.time()
+        
         valid_moves = engine.get_valid_moves(self.player_idx)
         if not valid_moves:
             return None
             
         best_score = -math.inf
         best_move = valid_moves[0]
+        self._nodes = 0
         
         # We need a deep clone of the engine state to simulate moves
         # But cloning the whole engine is tricky if it holds a lot of logic.
@@ -31,6 +39,7 @@ class MinimaxBot(Bot):
             dummy_engine.game_over = engine.game_over
             
             dummy_engine.execute_move(move)
+            self._nodes += 1
             
             score = self._alphabeta(dummy_engine, self.max_depth - 1, alpha, beta, False)
             
@@ -40,9 +49,14 @@ class MinimaxBot(Bot):
                 
             alpha = max(alpha, best_score)
             
+        elapsed = (time.time() - t_start) * 1000
+        self.last_think_ms = elapsed
+        self.last_nodes = self._nodes
+        self.total_nodes += self._nodes
         return best_move
 
     def _alphabeta(self, engine, depth, alpha, beta, maximizing):
+        self._nodes += 1
         if depth == 0 or engine.game_over:
             return evaluate_state(engine.state, self.player_idx)
             

@@ -43,8 +43,16 @@ class InputManager:
                     if is_valid:
                         self.engine.execute_move(move)
                         self.selected_draft = None
+                        return move  # signal that a move was made
                     else:
-                        # Cancel selection if invalid line clicked or click elsewhere
+                        # Cancel selection if invalid line clicked
+                        self.selected_draft = None
+                        return None
+                else:
+                    new_draft = self._get_draft_click(pos)
+                    if new_draft:
+                        self.selected_draft = new_draft
+                    else:
                         self.selected_draft = None
                         
         elif event.type == pygame.KEYDOWN:
@@ -59,55 +67,58 @@ class InputManager:
         fcx, fcy = layout['factory_center']
         fradius = layout['factory_radius']
         
-        # Check Center
-        dist_center = math.hypot(x - fcx, y - fcy)
-        if dist_center <= 60:
-            if state.center.tiles:
-                # Take first valid color clicked
-                cx, cy = fcx - TILE_SIZE//2, fcy - TILE_SIZE//2
-                for i, tile in enumerate(state.center.tiles):
-                    if tile != Tile.FIRST_PLAYER and tile != Tile.EMPTY:
-                        row = i // 4
-                        col = i % 4
-                        tx = cx - 40 + col * (TILE_SIZE//2 + 2)
-                        ty = cy - 20 + row * (TILE_SIZE//2 + 2)
-                        rect = pygame.Rect(tx, ty, TILE_SIZE//2, TILE_SIZE//2)
-                        if rect.collidepoint(x, y):
-                             return ('center', 0, tile)
-                
-                # If they clicked center but not a specific tile, just grab first available color
-                for t in state.center.tiles:
-                    if t != Tile.FIRST_PLAYER and t != Tile.EMPTY:
-                        return ('center', 0, t)
-                        
-        # Check Factories
+        GAP_F = 4   # same gap as renderer factory
+        GAP_C = 6   # same gap as renderer center
+        COLS_C = 4
+        
+        # ---- Check Factories ----
         num = len(state.factories)
         angle_step = 2 * math.pi / num
+        
         for i, factory in enumerate(state.factories):
-            angle = i * angle_step - math.pi/2 # Start top
-            fx = fcx + fradius * math.cos(angle)
-            fy = fcy + fradius * math.sin(angle)
+            angle = i * angle_step - math.pi / 2
+            fx = int(fcx + fradius * math.cos(angle))
+            fy = int(fcy + fradius * math.sin(angle))
             
-            dist = math.hypot(x - fx, y - fy)
-            if dist <= 45:
-                # Find which tile was clicked
-                positions = [
-                    (fx - TILE_SIZE//2 - PADDING, fy - TILE_SIZE//2 - PADDING),
-                    (fx + PADDING, fy - TILE_SIZE//2 - PADDING),
-                    (fx - TILE_SIZE//2 - PADDING, fy + PADDING),
-                    (fx + PADDING, fy + PADDING)
-                ]
-                for j, tile in enumerate(factory.tiles):
-                    if j < 4 and tile != Tile.EMPTY:
-                        rect = pygame.Rect(positions[j][0], positions[j][1], TILE_SIZE, TILE_SIZE)
-                        if rect.collidepoint(x, y):
-                            return ('factory', i, tile)
-                            
-                # Or just grab the first available if clicked the circle
-                for t in factory.tiles:
-                    if t != Tile.EMPTY:
-                        return ('factory', i, t)
-                        
+            block_w = TILE_SIZE * 2 + GAP_F
+            block_h = TILE_SIZE * 2 + GAP_F
+            bx = fx - block_w // 2
+            by = fy - block_h // 2
+            
+            positions = [
+                (bx,                      by),
+                (bx + TILE_SIZE + GAP_F,  by),
+                (bx,                      by + TILE_SIZE + GAP_F),
+                (bx + TILE_SIZE + GAP_F,  by + TILE_SIZE + GAP_F)
+            ]
+            
+            for j, tile in enumerate(factory.tiles):
+                if j < 4 and tile != Tile.EMPTY:
+                    rect = pygame.Rect(positions[j][0], positions[j][1], TILE_SIZE, TILE_SIZE)
+                    if rect.collidepoint(x, y):
+                        return ('factory', i, tile)
+        
+        # ---- Check Center ----
+        display_tiles = [(idx2, t) for idx2, t in enumerate(state.center.tiles) if t != Tile.EMPTY]
+        
+        if display_tiles:
+            rows = (len(display_tiles) + COLS_C - 1) // COLS_C
+            total_w = min(len(display_tiles), COLS_C) * (TILE_SIZE + GAP_C) - GAP_C
+            total_h = rows * (TILE_SIZE + GAP_C) - GAP_C
+            origin_x = fcx - total_w // 2
+            origin_y = fcy - total_h // 2
+            
+            for idx2, (orig_i, tile) in enumerate(display_tiles):
+                if tile == Tile.FIRST_PLAYER:
+                    continue
+                row = idx2 // COLS_C
+                col = idx2 % COLS_C
+                tx = origin_x + col * (TILE_SIZE + GAP_C)
+                ty = origin_y + row * (TILE_SIZE + GAP_C)
+                rect = pygame.Rect(tx, ty, TILE_SIZE, TILE_SIZE)
+                if rect.collidepoint(x, y):
+                    return ('center', 0, tile)
+                    
         return None
 
     def _get_line_click(self, pos):
@@ -123,18 +134,18 @@ class InputManager:
         if not (bx <= x <= bx + BOARD_WIDTH and by <= y <= by + BOARD_HEIGHT):
             return None
             
-        start_y = by + 60
+        start_y = by + 42
         pattern_x = bx + 200
         
         # Check pattern lines 0-4
         for r in range(5):
-            # Click area for a row could be the whole row height and left side of board
-            row_rect = pygame.Rect(bx + 10, start_y + r * (TILE_SIZE + PADDING), 200, TILE_SIZE)
+            # Click area for a row: left side of board up to pattern_x
+            row_rect = pygame.Rect(bx + 10, start_y + r * (TILE_SIZE + PADDING), 190, TILE_SIZE)
             if row_rect.collidepoint(x, y):
                 return r
                 
         # Check floor
-        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 20
+        floor_y = start_y + 5 * (TILE_SIZE + PADDING) + 10
         floor_rect = pygame.Rect(bx + 10, floor_y, BOARD_WIDTH - 20, TILE_SIZE)
         if floor_rect.collidepoint(x, y):
             return -1

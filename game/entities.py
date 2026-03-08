@@ -34,6 +34,15 @@ class Bag:
     def is_empty(self):
         return len(self.tiles) == 0
 
+    def to_dict(self):
+        return {'tiles': [int(t) for t in self.tiles]}
+
+    @classmethod
+    def from_dict(cls, data):
+        b = cls()
+        b.tiles = [Tile(t) for t in data['tiles']]
+        return b
+
 class Factory:
     def __init__(self):
         self.tiles = []
@@ -50,6 +59,15 @@ class Factory:
         
     def is_empty(self):
         return len(self.tiles) == 0
+
+    def to_dict(self):
+        return {'tiles': [int(t) for t in self.tiles]}
+
+    @classmethod
+    def from_dict(cls, data):
+        f = cls()
+        f.tiles = [Tile(t) for t in data['tiles']]
+        return f
 
 class Center:
     def __init__(self):
@@ -75,6 +93,15 @@ class Center:
         # Empty if only EMPTY tiles are inside, or truly empty. 
         # But actually in Azul, center is empty if no colored tiles are present.
         return not any(t != Tile.FIRST_PLAYER and t != Tile.EMPTY for t in self.tiles)
+
+    def to_dict(self):
+        return {'tiles': [int(t) for t in self.tiles]}
+
+    @classmethod
+    def from_dict(cls, data):
+        c = cls()
+        c.tiles = [Tile(t) for t in data['tiles']]
+        return c
 
 class PlayerBoard:
     # Wall colors for each row. 
@@ -113,6 +140,23 @@ class PlayerBoard:
         b.pattern_lines = [dict(p) for p in self.pattern_lines]
         b.wall = [list(row) for row in self.wall]
         b.floor_line = list(self.floor_line)
+        return b
+
+    def to_dict(self):
+        return {
+            'score': self.score,
+            'pattern_lines': [{'color': int(p['color']), 'count': p['count']} for p in self.pattern_lines],
+            'wall': [list(row) for row in self.wall],
+            'floor_line': [int(t) for t in self.floor_line]
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        b = cls()
+        b.score = data['score']
+        b.pattern_lines = [{'color': Tile(p['color']), 'count': p['count']} for p in data['pattern_lines']]
+        b.wall = [list(row) for row in data['wall']]
+        b.floor_line = [Tile(t) for t in data['floor_line']]
         return b
 
     def add_to_pattern_line(self, line_index, tiles):

@@ -40,6 +40,32 @@ class GameState:
         cloned.round_number = self.round_number
         
         return cloned
+
+    def to_dict(self):
+        return {
+            'num_players': self.num_players,
+            'bag': self.bag.to_dict(),
+            'box': [int(t) for t in self.box],
+            'factories': [f.to_dict() for f in self.factories],
+            'center': self.center.to_dict(),
+            'players': [p.to_dict() for p in self.players],
+            'current_player_idx': self.current_player_idx,
+            'next_first_player_idx': self.next_first_player_idx,
+            'round_number': self.round_number
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        s = cls(data['num_players'])
+        s.bag = Bag.from_dict(data['bag'])
+        s.box = [Tile(t) for t in data['box']]
+        s.factories = [Factory.from_dict(f) for f in data['factories']]
+        s.center = Center.from_dict(data['center'])
+        s.players = [PlayerBoard.from_dict(p) for p in data['players']]
+        s.current_player_idx = data['current_player_idx']
+        s.next_first_player_idx = data['next_first_player_idx']
+        s.round_number = data['round_number']
+        return s
         
     def is_round_over(self):
         """Round is over when all factories and center are empty."""
