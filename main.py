@@ -299,6 +299,7 @@ def show_startup_screen(screen, clock):
     speed_options = [("0.1s", 0.1), ("0.25s", 0.25), ("0.5s", 0.5), ("1s", 1.0), ("2s", 2.0)]
     selected_speed = 1
     show_hint = False
+    bot_algo  = "minimax" # "minimax" or "mcts"
     load_btn  = {"rect": None}
     start_btn = {"rect": None}
     
@@ -410,6 +411,23 @@ def show_startup_screen(screen, clock):
         screen.blit(cb_txt, (cb_x + cb_size + 8, cb_y + 2))
         bottom_y += 40
 
+        # -- Bot Algorithm Toggle --
+        screen.blit(med.render("Bot Engine:", True, (60, 50, 40)), (right_x, bottom_y))
+        bottom_y += 34
+        
+        algo_rects = []
+        for ai, (albl, aval) in enumerate([("Minimax", "minimax"), ("MCTS", "mcts")]):
+            aw = 110
+            ax = right_x + ai * (aw + 10)
+            ar = pygame.Rect(ax, bottom_y, aw, 34)
+            algo_rects.append((ar, aval))
+            abg = (100, 165, 240) if aval == bot_algo else (195, 208, 228) if ar.collidepoint(m_pos) else (180, 192, 212)
+            pygame.draw.rect(screen, abg, ar, border_radius=5)
+            pygame.draw.rect(screen, (70, 100, 155), ar, 2, border_radius=5)
+            at = small.render(albl, True, (15, 15, 55))
+            screen.blit(at, (ar.centerx - at.get_width()//2, ar.centery - at.get_height()//2))
+        bottom_y += 50
+
         btn_y = min(bottom_y + 10, h - 80)
         start_r = pygame.Rect(right_x, btn_y, 178, 54)
         load_r  = pygame.Rect(right_x + 194, btn_y, 178, 54)
@@ -459,11 +477,14 @@ def show_startup_screen(screen, clock):
                         selected_speed = si
                 if cb_rect.collidepoint(event.pos):
                     show_hint = not show_hint
+                for ar, aval in algo_rects:
+                    if ar.collidepoint(event.pos):
+                        bot_algo = aval
                 if start_btn["rect"] and start_btn["rect"].collidepoint(event.pos):
                     _, np, nb, _ = presets[selected_preset]
                     return {"action": "new", "players": np, "num_bots": nb,
                              "show_hint": show_hint, "bot_delay": speed_options[selected_speed][1],
-                             "player_names": player_names[:np]}
+                             "player_names": player_names[:np], "bot_algo": bot_algo}
                 if load_btn["rect"] and load_btn["rect"].collidepoint(event.pos):
                     return {"action": "load"}
         clock.tick(60)
@@ -566,7 +587,7 @@ def main_loop():
                     b_type = args.bots[bot_idx - 1]
                     
                 if b_type == 'mcts':
-                    bots_dict[bot_idx] = MCTSBot(player_idx=bot_idx, iterations=200)
+                    bots_dict[bot_idx] = MCTSBot(player_idx=bot_idx, iterations=1000)
                 else:
                     bots_dict[bot_idx] = MinimaxBot(player_idx=bot_idx, max_depth=4)
                     
@@ -585,7 +606,7 @@ def main_loop():
             # e.g. 2P 1B => bot is P2 (idx 1)
             # e.g. 4P 4B => all 4 are bots
             bots_dict = {}
-            bot_type = args.bots[0] if args.bots else 'minimax'
+            bot_type = action_res.get("bot_algo", (args.bots[0] if args.bots else 'minimax'))
             for i in range(num_bots):
                 player_idx = chosen_players - num_bots + i  # assign to last N slots
                 if bot_type == 'mcts':
