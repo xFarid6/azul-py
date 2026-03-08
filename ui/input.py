@@ -4,8 +4,9 @@ from game.entities import Tile
 from .constants import *
 
 class InputManager:
-    def __init__(self, engine):
+    def __init__(self, engine, renderer):
         self.engine = engine
+        self.renderer = renderer
         self.selected_draft = None # ('factory'/'center', idx, Tile.COLOR)
         
     def handle_event(self, event):
@@ -54,13 +55,16 @@ class InputManager:
         """Returns ('factory'/'center', idx, color) or None"""
         x, y = pos
         state = self.engine.state
+        layout = self.renderer.get_layout()
+        fcx, fcy = layout['factory_center']
+        fradius = layout['factory_radius']
         
         # Check Center
-        dist_center = math.hypot(x - FACTORY_CENTER[0], y - FACTORY_CENTER[1])
+        dist_center = math.hypot(x - fcx, y - fcy)
         if dist_center <= 60:
             if state.center.tiles:
                 # Take first valid color clicked
-                cx, cy = FACTORY_CENTER[0] - TILE_SIZE//2, FACTORY_CENTER[1] - TILE_SIZE//2
+                cx, cy = fcx - TILE_SIZE//2, fcy - TILE_SIZE//2
                 for i, tile in enumerate(state.center.tiles):
                     if tile != Tile.FIRST_PLAYER and tile != Tile.EMPTY:
                         row = i // 4
@@ -81,8 +85,8 @@ class InputManager:
         angle_step = 2 * math.pi / num
         for i, factory in enumerate(state.factories):
             angle = i * angle_step - math.pi/2 # Start top
-            fx = FACTORY_CENTER[0] + FACTORY_RADIUS * math.cos(angle)
-            fy = FACTORY_CENTER[1] + FACTORY_RADIUS * math.sin(angle)
+            fx = fcx + fradius * math.cos(angle)
+            fy = fcy + fradius * math.sin(angle)
             
             dist = math.hypot(x - fx, y - fy)
             if dist <= 45:
@@ -111,9 +115,9 @@ class InputManager:
         x, y = pos
         state = self.engine.state
         current_p = state.current_player_idx
+        layout = self.renderer.get_layout()
         
-        bx = PLAYER_1_POS[0] if current_p == 0 else PLAYER_2_POS[0]
-        by = PLAYER_1_POS[1] if current_p == 0 else PLAYER_2_POS[1]
+        bx, by = layout['player_positions'][current_p % 4]
         
         # Fast bounding box check for board
         if not (bx <= x <= bx + BOARD_WIDTH and by <= y <= by + BOARD_HEIGHT):

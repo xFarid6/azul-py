@@ -14,6 +14,11 @@ Azul is a tile-placement game played over multiple rounds.
 - **Denial Drafting (Hate Drafting):** In a 2-player game, observe the opponent's board. Forcing an opponent to take a huge stack of a color they can't place (or forcing them into the Floor Line) can swing the game heavily.
 - **Endgame Bonuses:** Aiming for completing vertical columns (7 pts) and 5-of-a-color (10 pts) is a frequent path to victory.
 
+## Paranoid N-Player Game Evaluation
+In games with 3 or 4 players, traditional Minimax needs an adjustment. We use a **Paranoid N-Player** strategy for both the Minimax Bot and Monte Carlo Tree Search (MCTS) evaluations.
+The core heuristic function scores a board dynamically by evaluating: `my_score - max(opponents_scores)`. 
+This creates a paranoid assumption where the bot evaluates all opponent moves as if they are acting optimally as a unified coalition against it to maximize the score of the leading opponent. This seamlessly scales the AI logic to N-players by consistently defending against the strongest opponent on the board.
+
 ## Search Space & Solvability
 - **Complexity:** Azul is a perfect information game (once tiles for a round are drawn). However, the number of possible states is enormous due to the variability of the tile bag, the board states (Wall and Pattern Lines), and the varied moves available from factories and the center.
 - **Is it Solved?:** Azul is *not* strongly solved from the starting position. The combinations of hidden information (what is left in the bag), combined with the branching factor in drafting, prevents brute-force minimax from start to finish.

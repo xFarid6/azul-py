@@ -6,7 +6,7 @@ class Tile(IntEnum):
     BLUE = 1
     YELLOW = 2
     RED = 3
-    BLACK = 4
+    GREEN = 4
     WHITE = 5
     FIRST_PLAYER = -1
 
@@ -14,7 +14,7 @@ class Bag:
     def __init__(self, tiles=None):
         if tiles is None:
             # Standard Azul bag: 20 of each color
-            self.tiles = [Tile.BLUE]*20 + [Tile.YELLOW]*20 + [Tile.RED]*20 + [Tile.BLACK]*20 + [Tile.WHITE]*20
+            self.tiles = [Tile.BLUE]*20 + [Tile.YELLOW]*20 + [Tile.RED]*20 + [Tile.GREEN]*20 + [Tile.WHITE]*20
         else:
             self.tiles = list(tiles)
         random.shuffle(self.tiles)
@@ -78,19 +78,19 @@ class Center:
 
 class PlayerBoard:
     # Wall colors for each row. 
-    # Example for row 0: Blue, Yellow, Red, Black, White
+    # Example for row 0: Blue, Yellow, Red, Green, White
     # But in Azul, the pattern is offset.
-    # Row 0: B Y R K W
-    # Row 1: W B Y R K
-    # Row 2: K W B Y R
-    # Row 3: R K W B Y
-    # Row 4: Y R K W B
+    # Row 0: B Y R G W
+    # Row 1: W B Y R G
+    # Row 2: G W B Y R
+    # Row 3: R G W B Y
+    # Row 4: Y R G W B
     WALL_PATTERN = [
-        [Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.BLACK, Tile.WHITE],
-        [Tile.WHITE, Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.BLACK],
-        [Tile.BLACK, Tile.WHITE, Tile.BLUE, Tile.YELLOW, Tile.RED],
-        [Tile.RED, Tile.BLACK, Tile.WHITE, Tile.BLUE, Tile.YELLOW],
-        [Tile.YELLOW, Tile.RED, Tile.BLACK, Tile.WHITE, Tile.BLUE]
+        [Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.GREEN, Tile.WHITE],
+        [Tile.WHITE, Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.GREEN],
+        [Tile.GREEN, Tile.WHITE, Tile.BLUE, Tile.YELLOW, Tile.RED],
+        [Tile.RED, Tile.GREEN, Tile.WHITE, Tile.BLUE, Tile.YELLOW],
+        [Tile.YELLOW, Tile.RED, Tile.GREEN, Tile.WHITE, Tile.BLUE]
     ]
 
     FLOOR_PENALTIES = [-1, -1, -2, -2, -2, -3, -3]

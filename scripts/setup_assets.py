@@ -16,13 +16,12 @@ def extract_tiles():
     img = Image.open(img_path)
     w, h = img.size
     print(f"Image size: {w}x{h}")
-    # User says: "the first row of the image must be cut into individal squares to be used as tiles"
-    # Assuming there are 5 columns of tiles
-    tile_w = w // 5
-    # Let's crop 5 tiles from the top row
+    # User says: "the image has changed, now its 299x55, and it contains the 5 colored tiles with some grey padding between them. tiles should all be 55x55"
+    tile_w = 55
+    padding = 6
     colors = ['blue', 'yellow', 'red', 'black', 'white']
     for i, color in enumerate(colors):
-        left = i * tile_w
+        left = i * (tile_w + padding)
         top = 0
         right = left + tile_w
         bottom = tile_w

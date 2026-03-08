@@ -13,13 +13,36 @@ class Renderer:
         # Load images mapping
         self.tile_images = self._load_images()
 
+    def get_layout(self):
+        w, h = self.screen.get_size()
+        cx, cy = w // 2, h // 2
+        
+        # Determine factory radius and layout offsets based on available space
+        min_dim = min(w, h)
+        factory_radius = max(80, min(150, int(min_dim * 0.15)))
+        
+        padding = 20
+        positions = [
+            (padding, padding),
+            (w - BOARD_WIDTH - padding, padding),
+            (padding, h - BOARD_HEIGHT - padding),
+            (w - BOARD_WIDTH - padding, h - BOARD_HEIGHT - padding)
+        ]
+        
+        return {
+            'w': w, 'h': h,
+            'factory_center': (cx, cy),
+            'factory_radius': factory_radius,
+            'player_positions': positions
+        }
+
     def _load_images(self):
         images = {}
         color_map = {
             Tile.BLUE: 'blue.png',
             Tile.YELLOW: 'yellow.png',
             Tile.RED: 'red.png',
-            Tile.BLACK: 'black.png',
+            Tile.GREEN: 'green.png',
             Tile.WHITE: 'white.png'
         }
         assets_dir = 'assets/tiles'
@@ -50,62 +73,86 @@ class Renderer:
             text_rect = text.get_rect(center=rect.center)
             self.screen.blit(text, text_rect)
 
-    def draw_game_state(self, game_state, selected_draft=None, highlighted_line=None):
+    def draw_game_state(self, game_state, selected_draft=None, highlighted_line=None, mouse_pos=None):
         self.screen.fill(BG_COLOR)
+        layout = self.get_layout()
+        w, h = layout['w'], layout['h']
         
         # Draw status text
         round_text = self.font.render(f"Round: {game_state.round_number}", True, TEXT_COLOR)
         player_text = self.large_font.render(f"Player {game_state.current_player_idx + 1}'s Turn", True, TEXT_COLOR)
-        self.screen.blit(round_text, (20, 20))
-        self.screen.blit(player_text, (WINDOW_WIDTH//2 - player_text.get_width()//2, 20))
+        self.screen.blit(round_text, (20, h // 2))
+        self.screen.blit(player_text, (w//2 - player_text.get_width()//2, 20))
+        
+        # Draw Undo button
+        undo_rect = pygame.Rect(20, h - 60, 100, 40)
+        pygame.draw.rect(self.screen, (200, 190, 180), undo_rect)
+        pygame.draw.rect(self.screen, (100, 90, 80), undo_rect, 2)
+        undo_text = self.font.render("Undo", True, TEXT_COLOR)
+        self.screen.blit(undo_text, (undo_rect.centerx - undo_text.get_width()//2, undo_rect.centery - undo_text.get_height()//2))
+        
+        # Info about hotkeys
+        hotkey_text = self.small_font.render("Press 'R' to Restart | 'Q' to Quit", True, TEXT_COLOR)
+        self.screen.blit(hotkey_text, (140, h - 50))
 
         # Draw factories
-        self._draw_factories(game_state.factories)
+        self._draw_factories(game_state.factories, layout)
         
         # Draw center
-        self._draw_center(game_state.center)
+        self._draw_center(game_state.center, layout)
         
         # Draw player boards
-        self._draw_player_board(game_state.players[0], "Player 1", PLAYER_1_POS[0], PLAYER_1_POS[1], 
-                                game_state.current_player_idx == 0, highlighted_line)
-        self._draw_player_board(game_state.players[1], "Player 2", PLAYER_2_POS[0], PLAYER_2_POS[1],
-                                game_state.current_player_idx == 1, highlighted_line)
+        for i, player in enumerate(game_state.players):
+            # If 3 players, can center the 3rd or just use bottom-left.
+            # Using corner slots 0, 1, 2, 3
+            pos = layout['player_positions'][i % 4]
+            self._draw_player_board(player, f"Player {i+1}", pos[0], pos[1], 
+                                    game_state.current_player_idx == i, highlighted_line)
 
         # Draw current selection
         if selected_draft:
             src_type, src_idx, color = selected_draft
             info_text = self.font.render(f"Selected: {color.name} from {src_type} {src_idx if src_type=='factory' else ''}", True, HIGHLIGHT_COLOR)
-            self.screen.blit(info_text, (WINDOW_WIDTH//2 - info_text.get_width()//2, 70))
+            self.screen.blit(info_text, (w//2 - info_text.get_width()//2, 70))
             
-    def _draw_factories(self, factories):
+        if mouse_pos:
+            pygame.draw.circle(self.screen, (100, 100, 100), mouse_pos, 5, 2)
+            
+    def _draw_factories(self, factories, layout):
         num = len(factories)
         angle_step = 2 * math.pi / num
+        fcx, fcy = layout['factory_center']
+        fradius = layout['factory_radius']
+        
         for i, factory in enumerate(factories):
             angle = i * angle_step - math.pi/2 # Start top
-            fx = FACTORY_CENTER[0] + FACTORY_RADIUS * math.cos(angle)
-            fy = FACTORY_CENTER[1] + FACTORY_RADIUS * math.sin(angle)
+            fx = fcx + fradius * math.cos(angle)
+            fy = fcy + fradius * math.sin(angle)
             
-            # Draw factory circle
-            pygame.draw.circle(self.screen, BOARD_BG, (int(fx), int(fy)), 45)
-            pygame.draw.circle(self.screen, (150, 140, 130), (int(fx), int(fy)), 45, 2)
+            # Draw factory circle - made larger
+            factory_draw_radius = 55
+            pygame.draw.circle(self.screen, BOARD_BG, (int(fx), int(fy)), factory_draw_radius)
+            pygame.draw.circle(self.screen, (150, 140, 130), (int(fx), int(fy)), factory_draw_radius, 2)
             
-            # Draw 4 tiles inside
+            # Draw 4 tiles inside with more padding
+            t_pad = PADDING + 4
             positions = [
-                (fx - TILE_SIZE//2 - PADDING, fy - TILE_SIZE//2 - PADDING),
-                (fx + PADDING, fy - TILE_SIZE//2 - PADDING),
-                (fx - TILE_SIZE//2 - PADDING, fy + PADDING),
-                (fx + PADDING, fy + PADDING)
+                (fx - TILE_SIZE//2 - t_pad, fy - TILE_SIZE//2 - t_pad),
+                (fx + t_pad, fy - TILE_SIZE//2 - t_pad),
+                (fx - TILE_SIZE//2 - t_pad, fy + t_pad),
+                (fx + t_pad, fy + t_pad)
             ]
             for j, tile in enumerate(factory.tiles):
                 if j < 4:
                     self.draw_tile(tile, positions[j][0], positions[j][1])
 
-    def _draw_center(self, center):
-        pygame.draw.circle(self.screen, BOARD_BG, FACTORY_CENTER, 60)
-        pygame.draw.circle(self.screen, (150, 140, 130), FACTORY_CENTER, 60, 2)
+    def _draw_center(self, center, layout):
+        fcx, fcy = layout['factory_center']
+        pygame.draw.circle(self.screen, BOARD_BG, (fcx, fcy), 75)
+        pygame.draw.circle(self.screen, (150, 140, 130), (fcx, fcy), 75, 2)
         
         # Draw center tiles in a spiral or grid
-        cx, cy = FACTORY_CENTER[0] - TILE_SIZE//2, FACTORY_CENTER[1] - TILE_SIZE//2
+        cx, cy = fcx - TILE_SIZE//2, fcy - TILE_SIZE//2
         
         for i, tile in enumerate(center.tiles):
             # Simple grid for center
@@ -150,7 +197,8 @@ class Renderer:
                 if c < line['count']:
                     self.draw_tile(line['color'], tx, ty)
 
-        # Wall
+        # Wall (move to right with more padding separating it from pattern lines)
+        wall_x = x + 250
         for r in range(5):
             for c in range(5):
                 tx = wall_x + c * (TILE_SIZE + PADDING)

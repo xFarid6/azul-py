@@ -7,11 +7,14 @@ def evaluate_state(state, player_idx):
     """
     my_score = _evaluate_player(state.players[player_idx])
     
-    # Assuming 2 players for simplicity in this bot
-    opponent_idx = 1 - player_idx
-    opp_score = _evaluate_player(state.players[opponent_idx])
+    opp_scores = [
+        _evaluate_player(player) 
+        for i, player in enumerate(state.players) 
+        if i != player_idx
+    ]
+    max_opp_score = max(opp_scores) if opp_scores else 0
     
-    return my_score - opp_score
+    return my_score - max_opp_score
 
 def _evaluate_player(player):
     score = player.score

@@ -207,7 +207,7 @@ class GameEngine:
                     player.score += 7
             
             # Score 5-of-a-color (10 pts)
-            for color in [Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.BLACK, Tile.WHITE]:
+            for color in [Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.GREEN, Tile.WHITE]:
                 color_count = 0
                 for r in range(5):
                     c = PlayerBoard.WALL_PATTERN[r].index(color)

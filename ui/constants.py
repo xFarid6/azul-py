@@ -2,8 +2,8 @@ import pygame
 from game.entities import Tile
 
 # Window Settings
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
+WINDOW_WIDTH = 1400
+WINDOW_HEIGHT = 1000
 FPS = 60
 
 # Colors
@@ -19,7 +19,7 @@ TILE_COLORS = {
     Tile.BLUE: (0, 100, 200),
     Tile.YELLOW: (255, 200, 0),
     Tile.RED: (200, 40, 40),
-    Tile.BLACK: (40, 40, 40),
+    Tile.GREEN: (40, 180, 40),
     Tile.WHITE: (245, 245, 245),
     Tile.FIRST_PLAYER: (150, 200, 150)
 }
@@ -28,12 +28,6 @@ TILE_COLORS = {
 TILE_SIZE = 40
 PADDING = 5
 
-# Board positioning
+# Board dimensions
 BOARD_WIDTH = 450
 BOARD_HEIGHT = 350
-PLAYER_1_POS = (50, 400)
-PLAYER_2_POS = (700, 400)
-
-CENTER_START = (400, 150)
-FACTORY_RADIUS = 120
-FACTORY_CENTER = (600, 150)
