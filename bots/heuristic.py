@@ -78,11 +78,11 @@ def _evaluate_player(player):
             if filled_of_color == 5:
                 score += 10 # Color set bonus
 
-    # Sub penalty for floor (tiles are already negative, but prioritize avoiding them)
+    # Sub penalty for floor
     penalty = 0
     for i, tile in enumerate(player.floor_line):
         if i < len(PlayerBoard.FLOOR_PENALTIES):
             penalty += PlayerBoard.FLOOR_PENALTIES[i]
             
-    score += penalty * 1.2 # Make bot even more adverse to floor tiles
+    score += penalty * 1.2 # Make bot adverse to floor tiles
     return score

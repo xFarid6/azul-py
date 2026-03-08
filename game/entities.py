@@ -37,8 +37,6 @@ class Bag:
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
 
-    def copy_from(self, other):
-        self.tiles = list(other.tiles)
 
     @classmethod
     def from_dict(cls, data):
@@ -62,9 +60,6 @@ class Factory:
         
     def is_empty(self):
         return len(self.tiles) == 0
-
-    def copy_from(self, other):
-        self.tiles = list(other.tiles)
 
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
@@ -100,8 +95,6 @@ class Center:
         # But actually in Azul, center is empty if no colored tiles are present.
         return not any(t != Tile.FIRST_PLAYER and t != Tile.EMPTY for t in self.tiles)
 
-    def copy_from(self, other):
-        self.tiles = list(other.tiles)
 
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
@@ -159,16 +152,6 @@ class PlayerBoard:
             'floor_line': [int(t) for t in self.floor_line]
         }
 
-    def copy_from(self, other):
-        self.score = other.score
-        # Faster to reuse the dicts if possible, but let's just update values
-        for i in range(5):
-            self.pattern_lines[i]['color'] = other.pattern_lines[i]['color']
-            self.pattern_lines[i]['count'] = other.pattern_lines[i]['count']
-            # wall is list of lists
-            for j in range(5):
-                self.wall[i][j] = other.wall[i][j]
-        self.floor_line = list(other.floor_line)
 
     @classmethod
     def from_dict(cls, data):

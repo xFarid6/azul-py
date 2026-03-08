@@ -20,10 +20,6 @@ class GameEngine:
             tiles = self.state.bag.draw(min(4, len(self.state.bag.tiles)))
             factory.fill(tiles)
 
-    def reset_to_state(self, state, game_over=False):
-        """Resets the engine to a specific state for simulation."""
-        self.state.copy_from(state)
-        self.game_over = game_over
 
     def to_dict(self):
         return {
