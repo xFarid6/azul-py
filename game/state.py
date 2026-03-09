@@ -1,6 +1,11 @@
 from .entities import PlayerBoard, Factory, Center, Bag, Tile
+from .hashing import get_state_hash
 
 class GameState:
+    __slots__ = [
+        'num_players', 'bag', 'box', 'factories', 'center', 
+        'players', 'current_player_idx', 'next_first_player_idx', 'round_number'
+    ]
     def __init__(self, num_players=2):
         self.num_players = num_players
         self.bag = Bag()
@@ -15,6 +20,9 @@ class GameState:
         self.next_first_player_idx = 0
         
         self.round_number = 1
+
+    def get_hash(self):
+        return get_state_hash(self)
 
     def _num_factories(self, num_players):
         if num_players == 2: return 5

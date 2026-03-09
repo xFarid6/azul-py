@@ -11,6 +11,7 @@ class Tile(IntEnum):
     FIRST_PLAYER = -1
 
 class Bag:
+    __slots__ = ['tiles']
     def __init__(self, tiles=None):
         if tiles is None:
             # Standard Azul bag: 20 of each color
@@ -48,6 +49,7 @@ class Bag:
         return b
 
 class Factory:
+    __slots__ = ['tiles']
     def __init__(self):
         self.tiles = []
         
@@ -77,6 +79,7 @@ class Factory:
         return f
 
 class Center:
+    __slots__ = ['tiles']
     def __init__(self):
         self.tiles = [Tile.FIRST_PLAYER]
         
@@ -131,6 +134,7 @@ class PlayerBoard:
     ]
 
     FLOOR_PENALTIES = [-1, -1, -2, -2, -2, -3, -3]
+    __slots__ = ['score', 'pattern_lines', 'wall_mask', 'floor_line']
 
     def __init__(self):
         self.score = 0
