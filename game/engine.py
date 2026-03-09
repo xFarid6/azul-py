@@ -20,6 +20,14 @@ class GameEngine:
             tiles = self.state.bag.draw(min(4, len(self.state.bag.tiles)))
             factory.fill(tiles)
 
+    def reset_to_state(self, state, game_over):
+        """
+        Resets the engine to a specific state. 
+        Used to reuse engine objects during MCTS simulations.
+        """
+        self.state.copy_from(state)
+        self.game_over = game_over
+
 
     def to_dict(self):
         return {
@@ -136,13 +144,13 @@ class GameEngine:
                     col_idx = PlayerBoard.WALL_PATTERN[line_idx].index(color)
                     
                     # Place on wall
-                    player.wall[line_idx][col_idx] = True
+                    player.wall_mask |= (1 << (line_idx * 5 + col_idx))
                     
                     # Discard remaining tiles to box
                     self.state.box.extend([color] * line_idx)
                     
                     # Score placement
-                    points = self._score_placement(player.wall, line_idx, col_idx)
+                    points = self._score_placement(player.wall_mask, line_idx, col_idx)
                     player.score += points
                     
                     # Empty pattern line
@@ -164,7 +172,8 @@ class GameEngine:
         # 3. Check for end game
         for player in self.state.players:
             for row in range(5):
-                if all(player.wall[row]):
+                # Row completion check: (mask >> (row * 5)) & 0b11111 == 0b11111
+                if (player.wall_mask >> (row * 5)) & 0x1F == 0x1F:
                     self.game_over = True
                     self._score_end_game()
                     return
@@ -174,28 +183,28 @@ class GameEngine:
         self.state.current_player_idx = self.state.next_first_player_idx
         self._setup_round()
 
-    def _score_placement(self, wall, row, col):
+    def _score_placement(self, wall_mask, row, col):
         """Calculates points for placing a tile at (row, col) based on contiguous tiles."""
         h_score = 1
         v_score = 1
         
         # Horizontal
         c = col - 1
-        while c >= 0 and wall[row][c]:
+        while c >= 0 and (wall_mask >> (row * 5 + c)) & 1:
             h_score += 1
             c -= 1
         c = col + 1
-        while c < 5 and wall[row][c]:
+        while c < 5 and (wall_mask >> (row * 5 + c)) & 1:
             h_score += 1
             c += 1
             
         # Vertical
         r = row - 1
-        while r >= 0 and wall[r][col]:
+        while r >= 0 and (wall_mask >> (r * 5 + col)) & 1:
             v_score += 1
             r -= 1
         r = row + 1
-        while r < 5 and wall[r][col]:
+        while r < 5 and (wall_mask >> (r * 5 + col)) & 1:
             v_score += 1
             r += 1
             
@@ -211,22 +220,25 @@ class GameEngine:
     def _score_end_game(self):
         """Applies endgame bonuses for completed rows, columns, and 5-of-a-color."""
         for player in self.state.players:
+            mask = player.wall_mask
             # Score rows (2 pts)
             for row in range(5):
-                if all(player.wall[row]):
+                if (mask >> (row * 5)) & 0x1F == 0x1F:
                     player.score += 2
             
             # Score columns (7 pts)
+            # Column mask for col c: (1<<c) | (1<<(c+5)) | (1<<(c+10)) | (1<<(c+15)) | (1<<(c+20))
             for col in range(5):
-                if all(player.wall[r][col] for r in range(5)):
+                col_mask = (1 << col) | (1 << (col + 5)) | (1 << (col + 10)) | (1 << (col + 15)) | (1 << (col + 20))
+                if (mask & col_mask) == col_mask:
                     player.score += 7
             
             # Score 5-of-a-color (10 pts)
             for color in [Tile.BLUE, Tile.YELLOW, Tile.RED, Tile.GREEN, Tile.WHITE]:
-                color_count = 0
+                color_mask = 0
                 for r in range(5):
                     c = PlayerBoard.WALL_PATTERN[r].index(color)
-                    if player.wall[r][c]:
-                        color_count += 1
-                if color_count == 5:
+                    color_mask |= (1 << (r * 5 + c))
+                
+                if (mask & color_mask) == color_mask:
                     player.score += 10

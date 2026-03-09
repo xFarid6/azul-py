@@ -35,39 +35,45 @@ class MCTSBot(Bot):
             return valid_moves[0]
             
         root = MCTSNode()
-        root.untried_moves = valid_moves
+        # Light heuristic: prefer placing tiles over floor tiles
+        root.untried_moves = sorted(valid_moves, key=lambda m: (m['target_line'] == -1, random.random()))
+        
+        # Simulation objects reused across iterations
+        sim_engine = GameEngine(engine.state.num_players)
+        sim_state = sim_engine.state
         
         for i in range(self.iterations):
             node = root
-            sim_engine = GameEngine(engine.state.num_players)
-            sim_engine.state = engine.state.clone()
-            sim_engine.game_over = engine.game_over
+            sim_engine.reset_to_state(engine.state, engine.game_over)
             
-            # 1. Selection
-            while node.untried_moves == [] and node.children != []:
-                node = self._select_child(node)
-                sim_engine.execute_move(node.move)
-                
-            # 2. Expansion
-            if node.untried_moves != []:
-                move = random.choice(node.untried_moves)
-                node.untried_moves.remove(move)
-                
-                current_p = sim_engine.state.current_player_idx
-                sim_engine.execute_move(move)
-                
-                child = MCTSNode(move=move, parent=node)
-                child.player_just_moved = current_p
-                
-                if not sim_engine.game_over:
-                    child.untried_moves = sim_engine.get_valid_moves(sim_engine.state.current_player_idx)
+            # Selection & Expansion with Progressive Widening
+            while not sim_engine.game_over:
+                if node.untried_moves != [] and (len(node.children) < 1.0 + 1.2 * math.pow(node.visits, 0.5)):
+                    # Expansion
+                    move = node.untried_moves.pop(0)
+                    current_p = sim_state.current_player_idx
+                    sim_engine.execute_move(move)
                     
-                node.children.append(child)
-                node = child
-                
-            # 3. Rollout
+                    child = MCTSNode(move=move, parent=node)
+                    child.player_just_moved = current_p
+                    if not sim_engine.game_over:
+                        raw_moves = sim_engine.get_valid_moves(sim_state.current_player_idx)
+                        child.untried_moves = sorted(raw_moves, key=lambda m: (m['target_line'] == -1, random.random()))
+                    
+                    node.children.append(child)
+                    node = child
+                    break
+                elif node.children != []:
+                    # Selection
+                    node = self._select_child(node)
+                    sim_engine.execute_move(node.move)
+                else:
+                    # Leaf or terminal
+                    break
+                    
+            # Rollout (capped at 15 for better throughput)
             depth = 0
-            while not sim_engine.game_over and depth < 10:
+            while not sim_engine.game_over and depth < 15:
                 moves = sim_engine.get_valid_moves(sim_engine.state.current_player_idx)
                 if not moves: break
                 best_moves = [m for m in moves if m['target_line'] != -1]
@@ -75,7 +81,7 @@ class MCTSBot(Bot):
                 sim_engine.execute_move(random.choice(best_moves))
                 depth += 1
                 
-            # 4. Backpropagation
+            # Backpropagation
             eval_score = evaluate_state(sim_engine.state, self.player_idx)
             reward = 0.5 + max(-0.5, min(0.5, eval_score / 20.0))
             
@@ -96,9 +102,20 @@ class MCTSBot(Bot):
         return best_child.move
         
     def _select_child(self, node):
-        best_score = -1
+        best_score = -1e9
         best_child = None
+        
+        # Pruning threshold: skip moves that are clearly bad after enough samples
+        pruned_children = []
         for child in node.children:
+            if child.visits > 30 and (child.value / child.visits) < 0.1:
+                continue
+            pruned_children.append(child)
+            
+        if not pruned_children: 
+            pruned_children = node.children # Fallback if all are pruned
+            
+        for child in pruned_children:
             exploit = child.value / child.visits
             explore = math.sqrt(2.0 * math.log(node.visits) / child.visits)
             score = exploit + explore

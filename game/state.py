@@ -24,8 +24,26 @@ class GameState:
 
     def clone(self):
         """Deep copy for AI simulation"""
-        import copy
-        return copy.deepcopy(self)
+        cloned = GameState(self.num_players)
+        cloned.copy_from(self)
+        return cloned
+
+    def copy_from(self, other):
+        """Copies state from another GameState object into this one."""
+        self.bag.copy_from(other.bag)
+        self.box = list(other.box)
+        
+        for i, factory in enumerate(other.factories):
+            self.factories[i].copy_from(factory)
+            
+        self.center.copy_from(other.center)
+        
+        for i, player in enumerate(other.players):
+            self.players[i].copy_from(player)
+            
+        self.current_player_idx = other.current_player_idx
+        self.next_first_player_idx = other.next_first_player_idx
+        self.round_number = other.round_number
 
     def to_dict(self):
         return {

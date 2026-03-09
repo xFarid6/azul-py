@@ -37,6 +37,9 @@ class Bag:
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
 
+    def copy_from(self, other):
+        self.tiles = list(other.tiles)
+
 
     @classmethod
     def from_dict(cls, data):
@@ -60,6 +63,9 @@ class Factory:
         
     def is_empty(self):
         return len(self.tiles) == 0
+
+    def copy_from(self, other):
+        self.tiles = list(other.tiles)
 
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
@@ -95,6 +101,8 @@ class Center:
         # But actually in Azul, center is empty if no colored tiles are present.
         return not any(t != Tile.FIRST_PLAYER and t != Tile.EMPTY for t in self.tiles)
 
+    def copy_from(self, other):
+        self.tiles = list(other.tiles)
 
     def to_dict(self):
         return {'tiles': [int(t) for t in self.tiles]}
@@ -130,8 +138,8 @@ class PlayerBoard:
         # Stored as dictionaries: { 'color': Tile.EMPTY, 'count': 0 }
         self.pattern_lines = [{'color': Tile.EMPTY, 'count': 0} for _ in range(5)]
         
-        # Wall is 5x5 boolean grid. True means filled.
-        self.wall = [[False for _ in range(5)] for _ in range(5)]
+        # Wall is 25-bit mask (5x5). row r, col c -> bit (r*5 + c)
+        self.wall_mask = 0
         
         # Floor line holds up to 7 tiles (the first player token and overflows)
         self.floor_line = []
@@ -140,17 +148,35 @@ class PlayerBoard:
         b = PlayerBoard()
         b.score = self.score
         b.pattern_lines = [dict(p) for p in self.pattern_lines]
-        b.wall = [list(row) for row in self.wall]
+        b.wall_mask = self.wall_mask
         b.floor_line = list(self.floor_line)
         return b
+
+    @property
+    def wall(self):
+        """Compatibility property for UI/tests. Returns 2D list."""
+        res = [[False for _ in range(5)] for _ in range(5)]
+        for r in range(5):
+            for c in range(5):
+                if (self.wall_mask >> (r * 5 + c)) & 1:
+                    res[r][c] = True
+        return res
 
     def to_dict(self):
         return {
             'score': self.score,
             'pattern_lines': [{'color': int(p['color']), 'count': p['count']} for p in self.pattern_lines],
-            'wall': [list(row) for row in self.wall],
+            'wall_mask': self.wall_mask,
             'floor_line': [int(t) for t in self.floor_line]
         }
+
+    def copy_from(self, other):
+        self.score = other.score
+        for i in range(5):
+            self.pattern_lines[i]['color'] = other.pattern_lines[i]['color']
+            self.pattern_lines[i]['count'] = other.pattern_lines[i]['count']
+        self.wall_mask = other.wall_mask
+        self.floor_line = list(other.floor_line)
 
 
     @classmethod
@@ -158,7 +184,13 @@ class PlayerBoard:
         b = cls()
         b.score = data['score']
         b.pattern_lines = [{'color': Tile(p['color']), 'count': p['count']} for p in data['pattern_lines']]
-        b.wall = [list(row) for row in data['wall']]
+        b.wall_mask = data.get('wall_mask', 0)
+        # Handle migration from old 'wall' list format if needed
+        if 'wall' in data:
+            for r in range(5):
+                for c in range(5):
+                    if data['wall'][r][c]:
+                        b.wall_mask |= (1 << (r * 5 + c))
         b.floor_line = [Tile(t) for t in data['floor_line']]
         return b
 
@@ -227,9 +259,8 @@ class PlayerBoard:
             return False
             
         # Check if color is already on the corresponding wall row
-        row = line_index
-        for col in range(5):
-            if self.WALL_PATTERN[row][col] == color and self.wall[row][col]:
-                return False
-                
+        col = self.WALL_PATTERN[line_index].index(color)
+        if (self.wall_mask >> (line_index * 5 + col)) & 1:
+            return False
+            
         return True
